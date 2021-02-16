@@ -23,20 +23,67 @@ const app = (() => {
   const pushButton = document.querySelector('.js-push-btn');
 
   // TODO 2.1 - check for notification support
+  if (!('Notification' in window)) {
+    console.log('This browser does not support notifications!');
+    return;
+  }
 
   // TODO 2.2 - request permission to show notifications
+  Notification.requestPermission(status => {
+    console.log('Notification permission status:', status);
+  });
 
   function displayNotification() {
 
     // TODO 2.3 - display a Notification
+    if (Notification.permission == 'granted') {
+      navigator.serviceWorker.getRegistration().then(reg => {
 
+      // TODO 2.4 - Add 'options' object to configure the notification
+      const options = {
+        body: 'First notification!',
+        icon: 'images/notification-flat.png',
+        vibrate: [100, 50, 100],
+        data: {
+          dateOfArrival: Date.now(),
+          primaryKey: 1
+        },
+        actions: [
+          {action: 'explore', title: 'Go to the site',
+            icon: 'images/checkmark.png'},
+          {action: 'close', title: 'Close the notification',
+            icon: 'images/xmark.png'},
+        ]
+      };
+      reg.showNotification('Hello world!', options);
+  });
+}
   }
 
   function initializeUI() {
 
     // TODO 3.3b - add a click event listener to the "Enable Push" button
     // and get the subscription object
-
+    pushButton.addEventListener('click', () => {
+      pushButton.disabled = true;
+      if (isSubscribed) {
+        unsubscribeUser();
+      } else {
+        subscribeUser();
+      }
+    });
+    
+    swRegistration.pushManager.getSubscription()
+    .then(subscription => {
+      isSubscribed = (subscription !== null);
+      updateSubscriptionOnServer(subscription);
+      if (isSubscribed) {
+        console.log('User IS subscribed.');
+      } else {
+        console.log('User is NOT subscribed.');
+      }
+      updateBtn();
+    });
   }
 
   // TODO 4.2a - add VAPID public key
@@ -44,7 +91,23 @@ const app = (() => {
   function subscribeUser() {
 
     // TODO 3.4 - subscribe to the push service
-
+    swRegistration.pushManager.subscribe({
+      userVisibleOnly: true
+    })
+    .then(subscription => {
+      console.log('User is subscribed:', subscription);
+      updateSubscriptionOnServer(subscription);
+      isSubscribed = true;
+      updateBtn();
+    })
+    .catch(err => {
+      if (Notification.permission === 'denied') {
+        console.warn('Permission for notifications was denied');
+      } else {
+        console.error('Failed to subscribe the user: ', err);
+      }
+      updateBtn();
+    });
   }
 
   function unsubscribeUser() {
@@ -116,6 +179,7 @@ const app = (() => {
         swRegistration = swReg;
 
         // TODO 3.3a - call the initializeUI() function
+        initializeUI();
       })
       .catch(err => {
         console.error('Service Worker Error', err);
@@ -125,5 +189,27 @@ const app = (() => {
     console.warn('Push messaging is not supported');
     pushButton.textContent = 'Push Not Supported';
   }
+
+  self.addEventListener('push', event => {
+    const options = {
+      body: 'This notification was generated from a push!',
+      icon: 'images/notification-flat.png',
+      vibrate: [100, 50, 100],
+      data: {
+        dateOfArrival: Date.now(),
+        primaryKey: 1
+      },
+      actions: [
+        {action: 'explore', title: 'Go to the site',
+          icon: 'images/checkmark.png'},
+        {action: 'close', title: 'Close the notification',
+          icon: 'images/xmark.png'},
+      ]
+    };
+  
+    event.waitUntil(
+      self.registration.showNotification('Push Notification', options)
+    );
+  });
 
 })();
